@@ -17,6 +17,7 @@ except ImportError:
 
 ROOT = Path(__file__).resolve().parent.parent
 SCHEMA_PATH = ROOT / "schema.json"
+DEFAULT_GOLD = ROOT / "data" / "test.jsonl"
 DEFAULT_SEED = ROOT / "data" / "seed.jsonl"
 
 STRUCTURED_FIELDS = (
@@ -43,7 +44,9 @@ def load_jsonl(path: Path) -> list[dict[str, Any]]:
 
 
 def extract_prediction(row: dict[str, Any]) -> Any:
-    """Accept either a raw model string or a dataset-style {input, output} object."""
+    """Accept raw model strings or dataset-style {input, output} objects."""
+    if "raw_output" in row:
+        return row["raw_output"]
     if "prediction" in row:
         return row["prediction"]
     if "output" in row:
@@ -54,7 +57,9 @@ def extract_prediction(row: dict[str, Any]) -> Any:
         for msg in reversed(row["messages"]):
             if isinstance(msg, dict) and msg.get("role") == "assistant":
                 return msg.get("content")
-    raise KeyError("no prediction field found (expected prediction|output|assistant|messages)")
+    raise KeyError(
+        "no prediction field found (expected raw_output|prediction|output|assistant|messages)"
+    )
 
 
 def try_parse_json(value: Any) -> tuple[bool, Any]:
@@ -63,7 +68,6 @@ def try_parse_json(value: Any) -> tuple[bool, Any]:
     if not isinstance(value, str):
         return False, None
     text = value.strip()
-    # Strip accidental markdown fences if present
     if text.startswith("```"):
         lines = text.splitlines()
         if lines and lines[0].startswith("```"):
@@ -132,19 +136,13 @@ def evaluate(gold_path: Path, pred_path: Path) -> int:
         if all_match:
             strict_exact += 1
 
-    # Markdown results table
     rows = [
         ("Raw JSON Parse Rate (%)", f"{pct(parse_ok, n):.1f}"),
         ("Strict Schema Compliance Rate (%)", f"{pct(schema_ok, n):.1f}"),
     ]
     for field in STRUCTURED_FIELDS:
         rows.append((f"Exact Match: {field} (%)", f"{pct(field_hits[field], n):.1f}"))
-    rows.append(
-        (
-            "Overall Strict Exact Match (%)",
-            f"{pct(strict_exact, n):.1f}",
-        )
-    )
+    rows.append(("Overall Strict Exact Match (%)", f"{pct(strict_exact, n):.1f}"))
 
     print(f"Gold: {gold_path}")
     print(f"Pred: {pred_path}")
@@ -159,17 +157,17 @@ def evaluate(gold_path: Path, pred_path: Path) -> int:
 
 
 def self_test() -> int:
-    """Evaluate seed against itself; expect 100% on all metrics."""
-    code = evaluate(DEFAULT_SEED, DEFAULT_SEED)
+    """Evaluate gold against itself; expect 100% on all metrics."""
+    gold = DEFAULT_GOLD if DEFAULT_GOLD.exists() else DEFAULT_SEED
+    code = evaluate(gold, gold)
     if code != 0:
         return code
 
-    # Recompute quickly to assert 100%
-    gold = load_jsonl(DEFAULT_SEED)
+    rows = load_jsonl(gold)
     schema = json.load(SCHEMA_PATH.open(encoding="utf-8"))
     validator = jsonschema.Draft7Validator(schema)
-    n = len(gold)
-    for row in gold:
+    n = len(rows)
+    for row in rows:
         out = row["output"]
         assert validator.is_valid(out), out
         for field in STRUCTURED_FIELDS:
@@ -182,22 +180,28 @@ def self_test() -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Evaluate extraction predictions")
-    parser.add_argument("--gold", default=str(DEFAULT_SEED), help="Ground-truth JSONL")
-    parser.add_argument("--pred", default=None, help="Predictions JSONL")
+    parser.add_argument("--gold", default=str(DEFAULT_GOLD), help="Ground-truth JSONL")
+    parser.add_argument(
+        "--preds",
+        "--pred",
+        dest="preds",
+        default=None,
+        help="Predictions JSONL (raw_output strings or output dicts)",
+    )
     parser.add_argument(
         "--self-test",
         action="store_true",
-        help="Evaluate data/seed.jsonl against itself (expect 100%)",
+        help="Evaluate gold against itself (expect 100%)",
     )
     args = parser.parse_args()
 
     if args.self_test:
         sys.exit(self_test())
 
-    if not args.pred:
-        parser.error("--pred is required unless --self-test is set")
+    if not args.preds:
+        parser.error("--preds is required unless --self-test is set")
 
-    sys.exit(evaluate(Path(args.gold), Path(args.pred)))
+    sys.exit(evaluate(Path(args.gold), Path(args.preds)))
 
 
 if __name__ == "__main__":

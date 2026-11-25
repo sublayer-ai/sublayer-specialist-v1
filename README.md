@@ -2,7 +2,7 @@
 
 Compact open-source specialist for **messy support text → strict JSON extraction**.
 
-Target base model for QLoRA fine-tuning (free T4 / Kaggle): [`Qwen/Qwen3.5-2B`](https://huggingface.co/Qwen/Qwen3.5-2B).
+Target base model for LoRA / QLoRA fine-tuning (free T4 / Kaggle): [`Qwen/Qwen3.5-2B`](https://huggingface.co/Qwen/Qwen3.5-2B).
 
 ## Task
 
@@ -12,61 +12,92 @@ Given noisy unstructured customer messages (typos, ALL CAPS, decoy numbers, prom
 | --- | --- | --- |
 | `category` | `string \| null` | `billing`, `bug`, `shipping`, `account`, `other`, or `null` |
 | `urgency` | `string` | `low`, `medium`, `high`, `critical` |
-| `customer_email` | `string \| null` | Explicit only — never invent |
-| `order_id` | `string \| null` | Explicit only — never invent; ignore phones/dates |
+| `customer_email` | `string \| null` | Explicit customer email only — never invent; ignore `support@` / `noreply@` |
+| `order_id` | `string \| null` | Explicit only — never invent; ignore phones, dates, tracking barcodes |
 | `action_required` | `boolean` | `false` for compliments / feedback-only |
 | `summary` | `string` | One concise factual sentence (≤20 words) |
 
 `additionalProperties: false`. Unstated identifiers must be `null`.
 
-## Setup (CPU / local)
+## Setup
+
+CPU / local (dataset + eval):
 
 ```bash
 pip install -r requirements.txt
 ```
 
-GPU / Kaggle training deps (later):
+GPU / Kaggle (train + inference):
 
 ```bash
 pip install -r requirements-train.txt
 ```
 
-## Local commands
+> On Windows local machines in this project, prefer `py -3` over `python`.
 
-Validate seed data against the schema:
+## End-to-end workflow
 
-```bash
-python scripts/validate.py data/seed.jsonl
-```
-
-Format chat-style SFT JSONL (`system` / `user` / `assistant`):
+### 1) Build + validate dataset (CPU)
 
 ```bash
-python scripts/format_sft.py
-# -> data/sft_train.jsonl
+py -3 scripts/build_dataset.py
+py -3 scripts/validate.py data/train.jsonl
+py -3 scripts/validate.py data/test.jsonl
 ```
 
-Self-test the eval harness (seed vs. itself → 100%):
+Produces leak-free splits: `data/train.jsonl` (300) and `data/test.jsonl` (100), seeded with `random.seed(42)`.
+
+### 2) Format SFT chat JSONL (CPU)
 
 ```bash
-python scripts/eval.py --self-test
+py -3 scripts/format_sft.py --input data/train.jsonl --output data/sft_train.jsonl
 ```
 
-Score model predictions:
+### 3) Train LoRA adapter (GPU)
 
 ```bash
-python scripts/eval.py --gold data/seed.jsonl --pred path/to/predictions.jsonl
+py -3 scripts/train_lora.py \
+  --data data/sft_train.jsonl \
+  --output-dir outputs/sublayer-specialist-v1-lora
 ```
 
-## Training plan (v0.1 → T4)
+Defaults are T4-friendly: `batch=4`, `grad_accum=4`, `epochs=3`, `lr=2e-4`, `max_seq_length=512`, `gradient_checkpointing=True`.
 
-1. Freeze schema + grow `data/seed.jsonl` / synthetic augmentations.
-2. QLoRA fine-tune `Qwen/Qwen3.5-2B` with `requirements-train.txt` on a free T4.
-3. Eval with `scripts/eval.py`; prioritize parse rate + schema compliance + structured-field exact match over `summary` wording.
+### 4) Run inference (GPU)
+
+Base model:
+
+```bash
+py -3 scripts/run_inference.py --mode base \
+  --input data/test.jsonl \
+  --output outputs/preds_base.jsonl
+```
+
+Fine-tuned LoRA:
+
+```bash
+py -3 scripts/run_inference.py --mode lora \
+  --adapter-dir outputs/sublayer-specialist-v1-lora \
+  --input data/test.jsonl \
+  --output outputs/preds_lora.jsonl
+```
+
+### 5) Evaluate (CPU)
+
+```bash
+py -3 scripts/eval.py --gold data/test.jsonl --preds outputs/preds_base.jsonl
+py -3 scripts/eval.py --gold data/test.jsonl --preds outputs/preds_lora.jsonl
+```
+
+Self-check (gold vs gold → 100%):
+
+```bash
+py -3 scripts/eval.py --preds data/test.jsonl --gold data/test.jsonl
+```
 
 ## Benchmark Results
 
-| Metric | Base `Qwen3.5-2B` | Fine-tuned (QLoRA) |
+| Metric | Base `Qwen3.5-2B` | Fine-tuned (LoRA) |
 | --- | ---: | ---: |
 | Raw JSON Parse Rate (%) | — | — |
 | Strict Schema Compliance Rate (%) | — | — |
