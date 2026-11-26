@@ -98,6 +98,8 @@ py -3 scripts/eval.py --gold data/test.jsonl --preds outputs/preds_lora.jsonl
 
 ## Benchmark Results (N=100 held-out `data/test.jsonl`)
 
+Full Base / v2.1 / v3 / v3b ablation (overall, slices, confusion matrices): [`docs/eval_ablation_report.md`](docs/eval_ablation_report.md).
+
 Research progression on the same eval harness (strict structured-field exact match excludes free-text `summary` wording):
 
 | Metric | v1 | v2 | v2.1 |
