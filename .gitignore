@@ -23,9 +23,13 @@ MANIFEST
 
 # Virtual environments
 .venv/
+.venv-*/
 venv/
 ENV/
 env/
+
+# Local installer packages
+*.deb
 
 # Environment / secrets
 .env
