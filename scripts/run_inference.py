@@ -16,7 +16,7 @@ if str(SCRIPTS) not in sys.path:
 from prompt import SYSTEM_PROMPT  # noqa: E402
 
 DEFAULT_INPUT = ROOT / "data" / "test.jsonl"
-DEFAULT_ADAPTER = ROOT / "outputs" / "sublayer-specialist-v1-lora"
+DEFAULT_ADAPTER = ROOT / "outputs" / "v3-lora"
 BASE_MODEL = "Qwen/Qwen3.5-2B"
 
 
@@ -76,12 +76,25 @@ def main() -> None:
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    model = AutoModelForCausalLM.from_pretrained(
-        args.model,
-        torch_dtype=dtype,
-        device_map="auto",
-        trust_remote_code=True,
-    )
+    # Prefer direct CUDA placement; fall back to CPU->CUDA if auto map fails on ROCm.
+    load_kwargs = dict(dtype=dtype, trust_remote_code=True)
+    try:
+        model = AutoModelForCausalLM.from_pretrained(
+            args.model,
+            device_map="cuda:0" if torch.cuda.is_available() else "cpu",
+            **load_kwargs,
+        )
+    except Exception as exc:
+        print(f"warn: direct GPU load failed ({exc}); retrying CPU then .to(cuda)")
+        model = AutoModelForCausalLM.from_pretrained(
+            args.model,
+            device_map="cpu",
+            **load_kwargs,
+        )
+        if hasattr(model, "tie_weights"):
+            model.tie_weights()
+        if torch.cuda.is_available():
+            model = model.to("cuda")
 
     if args.mode == "lora":
         try:
@@ -97,6 +110,9 @@ def main() -> None:
         print(f"Attached LoRA adapter from {adapter}")
 
     model.eval()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        print(f"GPU mem free/total: {torch.cuda.mem_get_info()}")
 
     with out_path.open("w", encoding="utf-8") as fout:
         for i, row in enumerate(rows, start=1):

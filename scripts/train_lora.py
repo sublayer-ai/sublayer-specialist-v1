@@ -16,7 +16,8 @@ if str(SCRIPTS) not in sys.path:
 from prompt import SYSTEM_PROMPT  # noqa: E402
 
 DEFAULT_DATA = ROOT / "data" / "sft_train.jsonl"
-DEFAULT_OUT = ROOT / "outputs" / "sublayer-specialist-v1-lora"
+# v3 default — do not overwrite the published v2.1 adapter path
+DEFAULT_OUT = ROOT / "outputs" / "v3-lora"
 BASE_MODEL = "Qwen/Qwen3.5-2B"
 
 
@@ -96,12 +97,18 @@ def main() -> None:
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
+    # Load on CPU first so missing/tied weights (e.g. lm_head) initialize without
+    # ROCm kernel-image failures during GPU _init_weights, then move to device.
     model = AutoModelForCausalLM.from_pretrained(
         args.model,
-        torch_dtype=dtype,
-        device_map="auto",
+        dtype=dtype,
+        device_map="cpu",
         trust_remote_code=True,
     )
+    if hasattr(model, "tie_weights"):
+        model.tie_weights()
+    if torch.cuda.is_available():
+        model = model.to("cuda")
     model.config.use_cache = False
 
     def formatting_func(example):
