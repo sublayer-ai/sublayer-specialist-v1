@@ -45,7 +45,7 @@ py -3 scripts/validate.py data/train.jsonl
 py -3 scripts/validate.py data/test.jsonl
 ```
 
-Produces leak-free splits: `data/train.jsonl` (300) and `data/test.jsonl` (100), seeded with `random.seed(42)`.
+Produces leak-free stratified splits: `data/train.jsonl` (600) and `data/test.jsonl` (100), seeded with `random.seed(42)`, with equal urgency bands (~25% each).
 
 ### 2) Format SFT chat JSONL (CPU)
 
@@ -61,7 +61,7 @@ py -3 scripts/train_lora.py \
   --output-dir outputs/sublayer-specialist-v1-lora
 ```
 
-Defaults are T4-friendly: `batch=4`, `grad_accum=4`, `epochs=3`, `lr=2e-4`, `max_seq_length=512`, `gradient_checkpointing=True`.
+Defaults are T4-friendly (v2.1): `batch=4`, `grad_accum=4`, `epochs=2`, `lr=1e-4`, `max_seq_length=512`, `gradient_checkpointing=True`.
 
 ### 4) Run inference (GPU)
 

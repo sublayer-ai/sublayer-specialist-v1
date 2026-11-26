@@ -13,7 +13,7 @@ SCRIPTS = Path(__file__).resolve().parent
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-from format_sft import SYSTEM_PROMPT  # noqa: E402
+from prompt import SYSTEM_PROMPT  # noqa: E402
 
 DEFAULT_INPUT = ROOT / "data" / "test.jsonl"
 DEFAULT_ADAPTER = ROOT / "outputs" / "sublayer-specialist-v1-lora"
@@ -41,7 +41,7 @@ def main() -> None:
     parser.add_argument("--input", default=str(DEFAULT_INPUT))
     parser.add_argument("--output", default=None, help="Predictions JSONL path")
     parser.add_argument("--model", default=BASE_MODEL)
-    parser.add_argument("--max-new-tokens", type=int, default=200)
+    parser.add_argument("--max-new-tokens", type=int, default=256)
     args = parser.parse_args()
 
     if args.output is None:
@@ -115,6 +115,7 @@ def main() -> None:
             inputs = {k: v.to(device) for k, v in inputs.items()}
 
             with torch.no_grad():
+                # Deterministic greedy decode — do not pass temperature when do_sample=False.
                 generated = model.generate(
                     **inputs,
                     max_new_tokens=args.max_new_tokens,

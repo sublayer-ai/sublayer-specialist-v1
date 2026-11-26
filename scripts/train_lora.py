@@ -9,9 +9,32 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+SCRIPTS = Path(__file__).resolve().parent
+if str(SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS))
+
+from prompt import SYSTEM_PROMPT  # noqa: E402
+
 DEFAULT_DATA = ROOT / "data" / "sft_train.jsonl"
 DEFAULT_OUT = ROOT / "outputs" / "sublayer-specialist-v1-lora"
 BASE_MODEL = "Qwen/Qwen3.5-2B"
+
+
+def normalize_messages(messages: list) -> list:
+    """Force the shared SYSTEM_PROMPT so train/inference templates stay identical."""
+    normalized = []
+    saw_system = False
+    for msg in messages:
+        role = msg.get("role")
+        content = msg.get("content", "")
+        if role == "system":
+            normalized.append({"role": "system", "content": SYSTEM_PROMPT})
+            saw_system = True
+        else:
+            normalized.append({"role": role, "content": content})
+    if not saw_system:
+        normalized.insert(0, {"role": "system", "content": SYSTEM_PROMPT})
+    return normalized
 
 
 def load_messages_dataset(path: Path):
@@ -26,7 +49,7 @@ def load_messages_dataset(path: Path):
             obj = json.loads(raw)
             if "messages" not in obj:
                 raise ValueError(f"{path}:{line_no}: missing 'messages'")
-            rows.append({"messages": obj["messages"]})
+            rows.append({"messages": normalize_messages(obj["messages"])})
     return Dataset.from_list(rows)
 
 
@@ -36,10 +59,11 @@ def main() -> None:
     parser.add_argument("--output-dir", default=str(DEFAULT_OUT), help="Adapter output directory")
     parser.add_argument("--model", default=BASE_MODEL, help="Base HF model id")
     parser.add_argument("--max-seq-length", type=int, default=512)
-    parser.add_argument("--num-train-epochs", type=float, default=3)
+    # v2.1: fewer epochs + lower LR to avoid overfitting / high-urgency bias
+    parser.add_argument("--num-train-epochs", type=float, default=2)
     parser.add_argument("--per-device-train-batch-size", type=int, default=4)
     parser.add_argument("--gradient-accumulation-steps", type=int, default=4)
-    parser.add_argument("--learning-rate", type=float, default=2e-4)
+    parser.add_argument("--learning-rate", type=float, default=1e-4)
     parser.add_argument("--logging-steps", type=int, default=10)
     parser.add_argument("--save-steps", type=int, default=50)
     args = parser.parse_args()

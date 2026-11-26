@@ -157,7 +157,7 @@ def evaluate(gold_path: Path, pred_path: Path) -> int:
 
 
 def self_test() -> int:
-    """Evaluate gold against itself; expect 100% on all metrics."""
+    """Evaluate gold against itself; expect 100%% on all metrics."""
     gold = DEFAULT_GOLD if DEFAULT_GOLD.exists() else DEFAULT_SEED
     code = evaluate(gold, gold)
     if code != 0:
@@ -174,7 +174,7 @@ def self_test() -> int:
             assert field in out
 
     print()
-    print(f"Self-test OK: {n}/{n} records scored 100% on parse/schema/exact-match.")
+    print(f"Self-test OK: {n}/{n} records scored 100%% on parse/schema/exact-match.")
     return 0
 
 
@@ -191,7 +191,7 @@ def main() -> None:
     parser.add_argument(
         "--self-test",
         action="store_true",
-        help="Evaluate gold against itself (expect 100%)",
+        help="Evaluate gold against itself (expect 100%%)",
     )
     args = parser.parse_args()
 
