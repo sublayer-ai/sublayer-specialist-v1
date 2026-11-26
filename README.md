@@ -98,8 +98,6 @@ py -3 scripts/eval.py --gold data/test.jsonl --preds outputs/preds_lora.jsonl
 
 ## Benchmark Results (N=100 held-out `data/test.jsonl`)
 
-Full Base / v2.1 / v3 / v3b ablation (overall, slices, confusion matrices): [`docs/eval_ablation_report.md`](docs/eval_ablation_report.md).
-
 Research progression on the same eval harness (strict structured-field exact match excludes free-text `summary` wording):
 
 | Metric | v1 | v2 | v2.1 |
@@ -113,7 +111,7 @@ Research progression on the same eval harness (strict structured-field exact mat
 | Exact Match: `action_required` (%) | 85.0 | 88.0 | 89.0 |
 | Overall Strict Exact Match (%) | 21.0 | 36.0 | 42.0 |
 
-Full slice-level breakdown and confusion matrices: [Evaluation & Ablation Report](outputs/eval_ablation_report.md)
+Full Base / v2.1 / v3 / v3b ablation (overall, slices, confusion matrices): [Evaluation & Ablation Report](docs/eval_ablation_report.md)
 
 ### Known limitations
 
