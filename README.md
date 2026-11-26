@@ -111,6 +111,8 @@ Research progression on the same eval harness (strict structured-field exact mat
 | Exact Match: `action_required` (%) | 85.0 | 88.0 | 89.0 |
 | Overall Strict Exact Match (%) | 21.0 | 36.0 | 42.0 |
 
+Full slice-level breakdown and confusion matrices: [Evaluation & Ablation Report](outputs/eval_ablation_report.md)
+
 ### Known limitations
 
 - **Not production-ready.** Treat v2.1 as an open research checkpoint.
